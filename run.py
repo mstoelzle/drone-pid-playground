@@ -40,14 +40,16 @@ def main():
     print()
     
     # Initialize drone parameters
+    # Using default values which are based on a typical ~1kg, 250mm class quadrotor
+    # These can be customized for different drone configurations
     params = DroneParams(
-        mass=1.0,
-        Ixx=0.01,
-        Iyy=0.01,
-        Izz=0.02,
-        linear_drag=0.1,
-        angular_drag=0.01,
-        arm_length=0.25,
+        mass=1.0,           # kg - typical for small drone with battery
+        Ixx=0.0082,         # kg*m^2 - roll inertia
+        Iyy=0.0082,         # kg*m^2 - pitch inertia
+        Izz=0.0140,         # kg*m^2 - yaw inertia
+        linear_drag=0.1,    # N/(m/s) - aerodynamic drag
+        angular_drag=0.02,  # N*m/(rad/s) - rotational damping
+        arm_length=0.17,    # m - motor to center distance
     )
     
     # Initialize components

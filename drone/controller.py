@@ -88,27 +88,53 @@ class PIDController:
 
 @dataclass
 class ControllerGains:
-    """All gains for the cascaded controller."""
+    """
+    All gains for the cascaded controller.
     
-    # Attitude rate controller (inner loop)
-    rate_roll: PIDGains = field(default_factory=lambda: PIDGains(kp=5.0, ki=0.5, kd=0.1, output_limit=5.0))
-    rate_pitch: PIDGains = field(default_factory=lambda: PIDGains(kp=5.0, ki=0.5, kd=0.1, output_limit=5.0))
-    rate_yaw: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.2, kd=0.05, output_limit=2.0))
+    These gains are tuned for a typical ~1kg quadrotor based on:
+    - PX4 Autopilot default gains and tuning guidelines
+    - Standard cascaded PID control theory for quadrotors
+    - Empirical tuning for simulation stability
     
-    # Attitude controller (middle loop)
-    att_roll: PIDGains = field(default_factory=lambda: PIDGains(kp=6.0, ki=0.0, kd=0.5, output_limit=3.0))
-    att_pitch: PIDGains = field(default_factory=lambda: PIDGains(kp=6.0, ki=0.0, kd=0.5, output_limit=3.0))
-    att_yaw: PIDGains = field(default_factory=lambda: PIDGains(kp=4.0, ki=0.0, kd=0.3, output_limit=2.0))
+    The cascaded structure is:
+    - Inner loop (Rate): fastest, controls angular velocities (rad/s)
+    - Middle loop (Attitude): controls orientation angles (rad)
+    - Outer loop (Position/Velocity): slowest, controls position/velocity
     
-    # Position controller (outer loop)
-    pos_x: PIDGains = field(default_factory=lambda: PIDGains(kp=1.0, ki=0.0, kd=0.5, output_limit=0.5))
-    pos_y: PIDGains = field(default_factory=lambda: PIDGains(kp=1.0, ki=0.0, kd=0.5, output_limit=0.5))
-    pos_z: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.1, kd=0.8, output_limit=10.0))
+    Rate controller gains are critical - these operate on angular velocity
+    errors in rad/s and output torques. Values should be much smaller than
+    attitude gains since the error magnitudes are different.
     
-    # Velocity controller
-    vel_x: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.1, kd=0.2, output_limit=0.5))
-    vel_y: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.1, kd=0.2, output_limit=0.5))
-    vel_z: PIDGains = field(default_factory=lambda: PIDGains(kp=5.0, ki=0.5, kd=0.5, output_limit=15.0))
+    References:
+    - PX4 MC_ROLLRATE_P default: 0.15, MC_ROLLRATE_I: 0.2, MC_ROLLRATE_D: 0.003
+    - PX4 MC_ROLL_P default: 6.5
+    """
+    
+    # Attitude rate controller (inner loop) - operates on angular velocity error [rad/s]
+    # These gains multiply with angular velocity error to produce torque commands
+    # Based on PX4 defaults: P~0.15, I~0.2, D~0.003
+    rate_roll: PIDGains = field(default_factory=lambda: PIDGains(kp=0.15, ki=0.2, kd=0.003, output_limit=1.0))
+    rate_pitch: PIDGains = field(default_factory=lambda: PIDGains(kp=0.15, ki=0.2, kd=0.003, output_limit=1.0))
+    rate_yaw: PIDGains = field(default_factory=lambda: PIDGains(kp=0.1, ki=0.1, kd=0.0, output_limit=0.5))
+    
+    # Attitude controller (middle loop) - operates on angle error [rad]
+    # Outputs desired angular rate. Based on PX4 MC_ROLL_P default: 6.5
+    # No D term typically needed - the rate controller handles damping
+    att_roll: PIDGains = field(default_factory=lambda: PIDGains(kp=6.5, ki=0.0, kd=0.0, output_limit=3.0))
+    att_pitch: PIDGains = field(default_factory=lambda: PIDGains(kp=6.5, ki=0.0, kd=0.0, output_limit=3.0))
+    att_yaw: PIDGains = field(default_factory=lambda: PIDGains(kp=4.0, ki=0.0, kd=0.0, output_limit=2.0))
+    
+    # Position controller (outer loop) - operates on position error [m]
+    # Outputs desired velocity
+    pos_x: PIDGains = field(default_factory=lambda: PIDGains(kp=1.0, ki=0.0, kd=0.0, output_limit=2.0))
+    pos_y: PIDGains = field(default_factory=lambda: PIDGains(kp=1.0, ki=0.0, kd=0.0, output_limit=2.0))
+    pos_z: PIDGains = field(default_factory=lambda: PIDGains(kp=1.5, ki=0.1, kd=0.0, output_limit=3.0))
+    
+    # Velocity controller - operates on velocity error [m/s]
+    # Outputs desired acceleration (converted to attitude for horizontal, thrust for vertical)
+    vel_x: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.1, kd=0.0, output_limit=3.0))
+    vel_y: PIDGains = field(default_factory=lambda: PIDGains(kp=2.0, ki=0.1, kd=0.0, output_limit=3.0))
+    vel_z: PIDGains = field(default_factory=lambda: PIDGains(kp=4.0, ki=0.5, kd=0.0, output_limit=10.0))
 
 
 @dataclass

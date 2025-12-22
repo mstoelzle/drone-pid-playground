@@ -9,20 +9,34 @@ from .state import DroneState
 
 @dataclass
 class DroneParams:
-    """Physical parameters of the quadrotor."""
-    mass: float = 1.0  # kg
+    """
+    Physical parameters of the quadrotor.
+    
+    Default values are based on a typical 250mm class quadrotor (~1kg),
+    similar to the Crazyflie (scaled up) or small racing/research drones.
+    
+    References:
+    - PX4 SITL Iris quadrotor parameters
+    - Crazyflie 2.0 parameters (scaled)
+    - Standard quadrotor dynamics literature
+    """
+    mass: float = 1.0  # kg - typical for 250-300mm class drone with battery
     
     # Inertia tensor (diagonal, body frame) [kg*m^2]
-    Ixx: float = 0.01
-    Iyy: float = 0.01
-    Izz: float = 0.02
+    # For a ~1kg drone with 170mm arm length (250mm diagonal):
+    # Ixx ≈ Iyy ≈ m * L^2 / 12 where L is characteristic length
+    # Values below are typical for a 1kg, 250mm class quadrotor
+    Ixx: float = 0.0082  # kg*m^2 - roll inertia
+    Iyy: float = 0.0082  # kg*m^2 - pitch inertia  
+    Izz: float = 0.0140  # kg*m^2 - yaw inertia (typically ~1.7x roll/pitch)
     
     # Drag coefficients
-    linear_drag: float = 0.1  # Linear drag coefficient
-    angular_drag: float = 0.01  # Angular drag coefficient
+    # Based on standard quadrotor aerodynamics at low speeds
+    linear_drag: float = 0.1  # Linear drag coefficient [N/(m/s)]
+    angular_drag: float = 0.02  # Angular drag coefficient [N*m/(rad/s)]
     
-    # Arm length (for visualization)
-    arm_length: float = 0.25  # m
+    # Arm length (motor to center distance)
+    arm_length: float = 0.17  # m - for 250mm diagonal (~340mm motor-to-motor)
     
     # Gravity
     gravity: float = 9.81  # m/s^2
