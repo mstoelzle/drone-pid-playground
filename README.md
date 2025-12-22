@@ -35,8 +35,8 @@ git clone https://github.com/mstoelzle/drone-pid-playground.git
 cd drone-pid-playground
 
 # Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv venv drone-pid-playground
+source drone-pid-playground/bin/activate  # On Windows: drone-pid-playground\Scripts\activate
 uv pip install -r requirements.txt
 ```
 
