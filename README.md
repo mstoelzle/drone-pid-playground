@@ -22,6 +22,26 @@ An interactive, real-time quadrotor drone simulator with a web-based GUI for tun
 
 ### Installation
 
+#### Option 1: Using uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone the repository
+git clone https://github.com/mstoelzle/drone-pid-playground.git
+cd drone-pid-playground
+
+# Create virtual environment and install dependencies
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -r requirements.txt
+```
+
+#### Option 2: Using pip
+
 ```bash
 # Clone the repository
 git clone https://github.com/mstoelzle/drone-pid-playground.git
