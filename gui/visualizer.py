@@ -396,41 +396,59 @@ class DroneVisualizer:
     def _setup_pid_sliders(self):
         """Setup all PID gain sliders organized by controller."""
         
-        # Attitude Rate Controller
+        # Rate Controller (Inner Loop)
+        # These gains operate on angular velocity errors (rad/s) -> torque output
+        # Typical values: Kp=0.1-0.3, Ki=0.1-0.5, Kd=0.001-0.01 (based on PX4)
         with self.server.gui.add_folder("Rate PID (Inner)"):
             self._create_pid_folder("Roll Rate", "rate_roll", 
-                                   kp_range=(0, 20), ki_range=(0, 5), kd_range=(0, 2))
+                                   kp_range=(0, 1.0), ki_range=(0, 1.0), kd_range=(0, 0.05),
+                                   kp_step=0.01, ki_step=0.01, kd_step=0.001)
             self._create_pid_folder("Pitch Rate", "rate_pitch",
-                                   kp_range=(0, 20), ki_range=(0, 5), kd_range=(0, 2))
+                                   kp_range=(0, 1.0), ki_range=(0, 1.0), kd_range=(0, 0.05),
+                                   kp_step=0.01, ki_step=0.01, kd_step=0.001)
             self._create_pid_folder("Yaw Rate", "rate_yaw",
-                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 1))
+                                   kp_range=(0, 0.5), ki_range=(0, 0.5), kd_range=(0, 0.02),
+                                   kp_step=0.01, ki_step=0.01, kd_step=0.001)
         
-        # Attitude Controller
+        # Attitude Controller (Middle Loop)
+        # These gains operate on angle errors (rad) -> angular rate output
+        # Typical values: Kp=4-10, Ki=0, Kd=0 (rate controller handles damping)
         with self.server.gui.add_folder("Attitude PID"):
             self._create_pid_folder("Roll", "att_roll",
-                                   kp_range=(0, 15), ki_range=(0, 2), kd_range=(0, 3))
+                                   kp_range=(0, 15), ki_range=(0, 2), kd_range=(0, 1),
+                                   kp_step=0.5, ki_step=0.1, kd_step=0.1)
             self._create_pid_folder("Pitch", "att_pitch",
-                                   kp_range=(0, 15), ki_range=(0, 2), kd_range=(0, 3))
+                                   kp_range=(0, 15), ki_range=(0, 2), kd_range=(0, 1),
+                                   kp_step=0.5, ki_step=0.1, kd_step=0.1)
             self._create_pid_folder("Yaw", "att_yaw",
-                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 2))
+                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 1),
+                                   kp_step=0.5, ki_step=0.1, kd_step=0.1)
         
         # Velocity Controller
+        # Operates on velocity errors (m/s) -> acceleration/attitude output
         with self.server.gui.add_folder("Velocity PID"):
             self._create_pid_folder("Vel X", "vel_x",
-                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 2))
+                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 1),
+                                   kp_step=0.1, ki_step=0.05, kd_step=0.05)
             self._create_pid_folder("Vel Y", "vel_y",
-                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 2))
+                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 1),
+                                   kp_step=0.1, ki_step=0.05, kd_step=0.05)
             self._create_pid_folder("Vel Z", "vel_z",
-                                   kp_range=(0, 15), ki_range=(0, 3), kd_range=(0, 3))
+                                   kp_range=(0, 15), ki_range=(0, 3), kd_range=(0, 2),
+                                   kp_step=0.1, ki_step=0.1, kd_step=0.1)
         
-        # Position Controller
+        # Position Controller (Outer Loop)
+        # Operates on position errors (m) -> velocity output
         with self.server.gui.add_folder("Position PID (Outer)"):
             self._create_pid_folder("Pos X", "pos_x",
-                                   kp_range=(0, 5), ki_range=(0, 1), kd_range=(0, 2))
+                                   kp_range=(0, 5), ki_range=(0, 1), kd_range=(0, 1),
+                                   kp_step=0.1, ki_step=0.05, kd_step=0.05)
             self._create_pid_folder("Pos Y", "pos_y",
-                                   kp_range=(0, 5), ki_range=(0, 1), kd_range=(0, 2))
+                                   kp_range=(0, 5), ki_range=(0, 1), kd_range=(0, 1),
+                                   kp_step=0.1, ki_step=0.05, kd_step=0.05)
             self._create_pid_folder("Pos Z", "pos_z",
-                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 3))
+                                   kp_range=(0, 10), ki_range=(0, 2), kd_range=(0, 2),
+                                   kp_step=0.1, ki_step=0.1, kd_step=0.1)
     
     def _create_pid_folder(
         self,
@@ -439,52 +457,68 @@ class DroneVisualizer:
         kp_range: tuple = (0, 10),
         ki_range: tuple = (0, 5),
         kd_range: tuple = (0, 2),
+        kp_step: float = 0.1,
+        ki_step: float = 0.05,
+        kd_step: float = 0.05,
     ):
-        """Create a folder with Kp, Ki, Kd sliders for a PID controller."""
+        """
+        Create a folder with Kp, Ki, Kd number inputs for a PID controller.
+        
+        Uses number inputs instead of sliders to allow values outside the typical range.
+        The ranges are used as hints (visible in the UI) but not enforced.
+        """
         gains: PIDGains = getattr(self.gains, gains_key)
         
         with self.server.gui.add_folder(name):
-            kp_slider = self.server.gui.add_slider(
-                "Kp", min=kp_range[0], max=kp_range[1], step=0.1, initial_value=gains.kp
+            # Use number inputs to allow arbitrary values
+            # The step parameter controls precision, no min/max clamping
+            kp_input = self.server.gui.add_number(
+                f"Kp [{kp_range[0]}–{kp_range[1]}]", 
+                initial_value=gains.kp,
+                step=kp_step,
             )
-            ki_slider = self.server.gui.add_slider(
-                "Ki", min=ki_range[0], max=ki_range[1], step=0.05, initial_value=gains.ki
+            ki_input = self.server.gui.add_number(
+                f"Ki [{ki_range[0]}–{ki_range[1]}]",
+                initial_value=gains.ki,
+                step=ki_step,
             )
-            kd_slider = self.server.gui.add_slider(
-                "Kd", min=kd_range[0], max=kd_range[1], step=0.05, initial_value=gains.kd
+            kd_input = self.server.gui.add_number(
+                f"Kd [{kd_range[0]}–{kd_range[1]}]",
+                initial_value=gains.kd,
+                step=kd_step,
             )
             
-            # Store slider references on self so they persist and callbacks work
+            # Store input references on self so they persist and callbacks work
             # We store them with unique attribute names
             kp_attr = f'pid_kp_{gains_key}'
             ki_attr = f'pid_ki_{gains_key}'
             kd_attr = f'pid_kd_{gains_key}'
-            setattr(self, kp_attr, kp_slider)
-            setattr(self, ki_attr, ki_slider)
-            setattr(self, kd_attr, kd_slider)
+            setattr(self, kp_attr, kp_input)
+            setattr(self, ki_attr, ki_input)
+            setattr(self, kd_attr, kd_input)
             
             # Also keep dict for reset functionality
             setattr(self, f'pid_sliders_{gains_key}', {
-                'kp': kp_slider,
-                'ki': ki_slider,
-                'kd': kd_slider,
+                'kp': kp_input,
+                'ki': ki_input,
+                'kd': kd_input,
             })
             
-            # Register callbacks - these update gains when sliders change
-            @kp_slider.on_update
+            # Register callbacks - these update gains when inputs change
+            @kp_input.on_update
             def _(event, key=gains_key, attr=kp_attr):
-                slider = getattr(self, attr)
-                getattr(self.gains, key).kp = slider.value
+                input_field = getattr(self, attr)
+                getattr(self.gains, key).kp = input_field.value
             
-            @ki_slider.on_update
+            @ki_input.on_update
             def _(event, key=gains_key, attr=ki_attr):
-                slider = getattr(self, attr)
-                getattr(self.gains, key).ki = slider.value
+                input_field = getattr(self, attr)
+                getattr(self.gains, key).ki = input_field.value
             
-            @kd_slider.on_update
+            @kd_input.on_update
             def _(event, key=gains_key, attr=kd_attr):
-                slider = getattr(self, attr)
-                getattr(self.gains, key).kd = slider.value
+                input_field = getattr(self, attr)
+                getattr(self.gains, key).kd = input_field.value
     
     def update(
         self,
