@@ -307,7 +307,13 @@ class CascadedPIDController:
         thrust = np.clip(thrust, 0, 4 * self.params.hover_thrust)
         
         # Yaw setpoint
-        yaw_des = setpoints.yaw
+        # In position control mode: use the yaw angle setpoint
+        # In velocity control mode: use current yaw (disables yaw angle control,
+        # allowing angular velocity setpoint to control yaw rate)
+        if setpoints.use_position_control:
+            yaw_des = setpoints.yaw
+        else:
+            yaw_des = euler[2]  # Current yaw - no angle control, only rate control
         
         # === Middle loop: Attitude control ===
         roll_error = roll_des - euler[0]
