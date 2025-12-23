@@ -77,6 +77,12 @@ def main():
     print("  - Click 'Reset' to return drone to origin")
     print("  - Click 'Pause' to freeze the simulation")
     print()
+    print("Direction Control:")
+    print("  - Position Mode: Direction buttons adjust position setpoint")
+    print("  - Velocity Mode: Enable 'Keyboard Mode' for button-controlled velocity")
+    print("  - When Keyboard Mode is on, buttons toggle velocity in each direction")
+    print("  - Click 'STOP' to reset all velocities to zero")
+    print()
     print("Press Ctrl+C to stop the server.")
     print()
     
@@ -142,18 +148,21 @@ def main():
             gains = visualizer.get_gains()
             setpoints = visualizer.get_setpoints()
             
-            # Update controller gains
+            # Update controller gains and anti-windup setting
             controller.update_gains(gains)
+            controller.set_anti_windup(visualizer.get_anti_windup_enabled())
             
             # Compute control outputs
             thrust, torques = controller.compute(state, setpoints, dt)
             
-            # Add disturbance torque if active
-            disturbance = visualizer.get_disturbance_torque()
-            total_torques = torques + disturbance
+            # Add disturbance torque and force if active
+            disturbance_torque = visualizer.get_disturbance_torque()
+            disturbance_force = visualizer.get_disturbance_force()
+            total_torques = torques + disturbance_torque
             
-            # Step dynamics
-            state = dynamics.step(state, thrust, total_torques, dt, substeps=sim_substeps)
+            # Step dynamics with external force
+            state = dynamics.step(state, thrust, total_torques, dt, substeps=sim_substeps,
+                                  external_force=disturbance_force)
             
             # Ground collision (simple constraint)
             if state.position[2] < 0:

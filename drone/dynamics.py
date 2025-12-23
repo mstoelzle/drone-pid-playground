@@ -72,6 +72,7 @@ class DroneDynamics:
         state: DroneState,
         thrust: float,
         torques: np.ndarray,
+        external_force: np.ndarray = None,
     ) -> np.ndarray:
         """
         Compute state derivatives given current state and control inputs.
@@ -80,11 +81,15 @@ class DroneDynamics:
             state: Current drone state
             thrust: Total thrust along body z-axis [N]
             torques: (tau_x, tau_y, tau_z) torques in body frame [N*m]
+            external_force: Optional external force in world frame [N]
         
         Returns:
             State derivative as a flat array
         """
         p = self.params
+        
+        if external_force is None:
+            external_force = np.zeros(3)
         
         # Position derivative = velocity
         pos_dot = state.velocity
@@ -101,8 +106,8 @@ class DroneDynamics:
         # Linear drag in world frame
         drag_world = -p.linear_drag * state.velocity
         
-        # Acceleration
-        vel_dot = (thrust_world + gravity_world + drag_world) / p.mass
+        # Acceleration (including external force)
+        vel_dot = (thrust_world + gravity_world + drag_world + external_force) / p.mass
         
         # Quaternion derivative
         # q_dot = 0.5 * q ⊗ [0, omega]
@@ -148,6 +153,7 @@ class DroneDynamics:
         thrust: float,
         torques: np.ndarray,
         dt: float,
+        external_force: np.ndarray = None,
     ) -> DroneState:
         """
         Integrate state forward using RK4.
@@ -157,17 +163,21 @@ class DroneDynamics:
             thrust: Total thrust [N]
             torques: Body torques [N*m]
             dt: Time step [s]
+            external_force: Optional external force in world frame [N]
         
         Returns:
             New drone state after integration
         """
         y = state.to_array()
         
+        if external_force is None:
+            external_force = np.zeros(3)
+        
         # RK4 stages
-        k1 = self.compute_derivatives(DroneState.from_array(y), thrust, torques)
-        k2 = self.compute_derivatives(DroneState.from_array(y + 0.5*dt*k1), thrust, torques)
-        k3 = self.compute_derivatives(DroneState.from_array(y + 0.5*dt*k2), thrust, torques)
-        k4 = self.compute_derivatives(DroneState.from_array(y + dt*k3), thrust, torques)
+        k1 = self.compute_derivatives(DroneState.from_array(y), thrust, torques, external_force)
+        k2 = self.compute_derivatives(DroneState.from_array(y + 0.5*dt*k1), thrust, torques, external_force)
+        k3 = self.compute_derivatives(DroneState.from_array(y + 0.5*dt*k2), thrust, torques, external_force)
+        k4 = self.compute_derivatives(DroneState.from_array(y + dt*k3), thrust, torques, external_force)
         
         # Combine
         y_new = y + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
@@ -184,6 +194,7 @@ class DroneDynamics:
         torques: np.ndarray,
         dt: float,
         substeps: int = 10,
+        external_force: np.ndarray = None,
     ) -> DroneState:
         """
         Step simulation with substeps for stability.
@@ -194,6 +205,7 @@ class DroneDynamics:
             torques: Body torques [N*m]
             dt: Total time step [s]
             substeps: Number of integration substeps
+            external_force: Optional external force in world frame [N]
         
         Returns:
             New drone state
@@ -201,8 +213,11 @@ class DroneDynamics:
         dt_sub = dt / substeps
         current = state.copy()
         
+        if external_force is None:
+            external_force = np.zeros(3)
+        
         for _ in range(substeps):
-            current = self.step_rk4(current, thrust, torques, dt_sub)
+            current = self.step_rk4(current, thrust, torques, dt_sub, external_force)
         
         return current
 

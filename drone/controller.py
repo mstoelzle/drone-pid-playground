@@ -31,12 +31,13 @@ class PIDState:
 
 
 class PIDController:
-    """Single-axis PID controller with anti-windup and derivative filtering."""
+    """Single-axis PID controller with optional anti-windup and derivative filtering."""
     
-    def __init__(self, gains: PIDGains = None):
+    def __init__(self, gains: PIDGains = None, use_anti_windup: bool = False):
         self.gains = gains or PIDGains()
         self.state = PIDState()
         self.derivative_filter_alpha = 0.1  # Low-pass filter coefficient
+        self.use_anti_windup = use_anti_windup  # Whether to apply integral saturation
     
     def reset(self):
         """Reset controller state."""
@@ -62,9 +63,10 @@ class PIDController:
         # Proportional term
         p_term = g.kp * error
         
-        # Integral term with anti-windup
+        # Integral term with optional anti-windup
         s.integral += error * dt
-        s.integral = np.clip(s.integral, -g.integral_limit, g.integral_limit)
+        if self.use_anti_windup:
+            s.integral = np.clip(s.integral, -g.integral_limit, g.integral_limit)
         i_term = g.ki * s.integral
         
         # Derivative term with filtering
@@ -167,9 +169,11 @@ class CascadedPIDController:
     - Inner loop: Angular rates -> torques
     """
     
-    def __init__(self, gains: ControllerGains = None, params: DroneParams = None):
+    def __init__(self, gains: ControllerGains = None, params: DroneParams = None, 
+                 use_anti_windup: bool = False):
         self.gains = gains or ControllerGains()
         self.params = params or DroneParams()
+        self.use_anti_windup = use_anti_windup
         
         # Create individual PID controllers
         self._init_controllers()
@@ -177,26 +181,27 @@ class CascadedPIDController:
     def _init_controllers(self):
         """Initialize all PID controllers."""
         g = self.gains
+        aw = self.use_anti_windup
         
         # Rate controllers
-        self.rate_roll_pid = PIDController(g.rate_roll)
-        self.rate_pitch_pid = PIDController(g.rate_pitch)
-        self.rate_yaw_pid = PIDController(g.rate_yaw)
+        self.rate_roll_pid = PIDController(g.rate_roll, use_anti_windup=aw)
+        self.rate_pitch_pid = PIDController(g.rate_pitch, use_anti_windup=aw)
+        self.rate_yaw_pid = PIDController(g.rate_yaw, use_anti_windup=aw)
         
         # Attitude controllers
-        self.att_roll_pid = PIDController(g.att_roll)
-        self.att_pitch_pid = PIDController(g.att_pitch)
-        self.att_yaw_pid = PIDController(g.att_yaw)
+        self.att_roll_pid = PIDController(g.att_roll, use_anti_windup=aw)
+        self.att_pitch_pid = PIDController(g.att_pitch, use_anti_windup=aw)
+        self.att_yaw_pid = PIDController(g.att_yaw, use_anti_windup=aw)
         
         # Position controllers
-        self.pos_x_pid = PIDController(g.pos_x)
-        self.pos_y_pid = PIDController(g.pos_y)
-        self.pos_z_pid = PIDController(g.pos_z)
+        self.pos_x_pid = PIDController(g.pos_x, use_anti_windup=aw)
+        self.pos_y_pid = PIDController(g.pos_y, use_anti_windup=aw)
+        self.pos_z_pid = PIDController(g.pos_z, use_anti_windup=aw)
         
         # Velocity controllers
-        self.vel_x_pid = PIDController(g.vel_x)
-        self.vel_y_pid = PIDController(g.vel_y)
-        self.vel_z_pid = PIDController(g.vel_z)
+        self.vel_x_pid = PIDController(g.vel_x, use_anti_windup=aw)
+        self.vel_y_pid = PIDController(g.vel_y, use_anti_windup=aw)
+        self.vel_z_pid = PIDController(g.vel_z, use_anti_windup=aw)
     
     def update_gains(self, gains: ControllerGains):
         """Update all controller gains."""
@@ -218,6 +223,17 @@ class CascadedPIDController:
         self.vel_x_pid.gains = gains.vel_x
         self.vel_y_pid.gains = gains.vel_y
         self.vel_z_pid.gains = gains.vel_z
+    
+    def set_anti_windup(self, use_anti_windup: bool = False):
+        """Enable or disable anti-windup for all controllers."""
+        self.use_anti_windup = use_anti_windup
+        
+        # Update all individual controllers
+        for pid in [self.rate_roll_pid, self.rate_pitch_pid, self.rate_yaw_pid,
+                    self.att_roll_pid, self.att_pitch_pid, self.att_yaw_pid,
+                    self.pos_x_pid, self.pos_y_pid, self.pos_z_pid,
+                    self.vel_x_pid, self.vel_y_pid, self.vel_z_pid]:
+            pid.use_anti_windup = use_anti_windup
     
     def reset(self):
         """Reset all controller states."""

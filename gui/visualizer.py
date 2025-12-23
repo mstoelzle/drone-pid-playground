@@ -92,8 +92,12 @@ class DroneVisualizer:
         # Disturbance state
         self.disturbance_active = False
         self.disturbance_torque = np.zeros(3)
+        self.disturbance_force = np.zeros(3)
         self.disturbance_duration = 0.2  # seconds
         self.disturbance_start_time = 0.0
+        
+        # Anti-windup state (disabled by default)
+        self.use_anti_windup = False
         
         # Trail points for trajectory
         self.trail_points: deque = deque(maxlen=200)
@@ -288,16 +292,22 @@ class DroneVisualizer:
         with self.server.gui.add_folder("Disturbance"):
             self.disturbance_button = self.server.gui.add_button("Apply Disturbance")
             
+            self.disturbance_type = self.server.gui.add_dropdown(
+                "Type",
+                options=["Torque", "Force"],
+                initial_value="Torque",
+            )
+            
             self.disturbance_magnitude_slider = self.server.gui.add_slider(
-                "Magnitude [N⋅m]", min=0.1, max=5.0, step=0.1, initial_value=1.0
+                "Magnitude", min=-10.0, max=10.0, step=0.1, initial_value=1.0
             )
             self.disturbance_duration_slider = self.server.gui.add_slider(
                 "Duration [s]", min=0.05, max=1.0, step=0.05, initial_value=0.2
             )
             self.disturbance_axis = self.server.gui.add_dropdown(
                 "Axis",
-                options=["Roll (X)", "Pitch (Y)", "Yaw (Z)", "Random"],
-                initial_value="Roll (X)",
+                options=["X (Roll/Forward)", "Y (Pitch/Right)", "Z (Yaw/Up)", "Random"],
+                initial_value="X (Roll/Forward)",
             )
             
             @self.disturbance_button.on_click
@@ -327,6 +337,15 @@ class DroneVisualizer:
             @self.gravity_comp_checkbox.on_update
             def _(_):
                 self.setpoints.use_gravity_compensation = self.gravity_comp_checkbox.value
+            
+            self.anti_windup_checkbox = self.server.gui.add_checkbox(
+                "Anti-Windup (Integral Saturation)",
+                initial_value=False,
+            )
+            
+            @self.anti_windup_checkbox.on_update
+            def _(_):
+                self.use_anti_windup = self.anti_windup_checkbox.value
             
             # Linear velocity setpoints
             with self.server.gui.add_folder("Linear Velocity"):
@@ -630,29 +649,34 @@ class DroneVisualizer:
         return self.paused
     
     def _trigger_disturbance(self):
-        """Trigger a disturbance torque impulse."""
+        """Trigger a disturbance impulse (torque or force)."""
         magnitude = self.disturbance_magnitude_slider.value
         axis = self.disturbance_axis.value
+        dist_type = self.disturbance_type.value
         
         # Determine disturbance direction
-        if axis == "Roll (X)":
+        if axis == "X (Roll/Forward)":
             direction = np.array([1.0, 0.0, 0.0])
-        elif axis == "Pitch (Y)":
+        elif axis == "Y (Pitch/Right)":
             direction = np.array([0.0, 1.0, 0.0])
-        elif axis == "Yaw (Z)":
+        elif axis == "Z (Yaw/Up)":
             direction = np.array([0.0, 0.0, 1.0])
         else:  # Random
             direction = np.random.randn(3)
             direction = direction / np.linalg.norm(direction)
         
-        # Random sign
-        sign = np.random.choice([-1, 1])
+        # Apply disturbance based on type (magnitude can be positive or negative)
+        if dist_type == "Torque":
+            self.disturbance_torque = magnitude * direction
+            self.disturbance_force = np.zeros(3)
+            print(f"Torque disturbance applied: {self.disturbance_torque} N⋅m for {self.disturbance_duration}s")
+        else:  # Force
+            self.disturbance_force = magnitude * direction
+            self.disturbance_torque = np.zeros(3)
+            print(f"Force disturbance applied: {self.disturbance_force} N for {self.disturbance_duration}s")
         
-        self.disturbance_torque = sign * magnitude * direction
         self.disturbance_active = True
         self.disturbance_start_time = time.time()
-        
-        print(f"Disturbance applied: {self.disturbance_torque} for {self.disturbance_duration}s")
     
     def _reset_setpoints(self):
         """Reset all velocity setpoints to zero."""
@@ -700,7 +724,27 @@ class DroneVisualizer:
         if elapsed > self.disturbance_duration:
             self.disturbance_active = False
             self.disturbance_torque = np.zeros(3)
+            self.disturbance_force = np.zeros(3)
             return np.zeros(3)
         
         return self.disturbance_torque
+    
+    def get_disturbance_force(self) -> np.ndarray:
+        """Get current disturbance force (returns zero if not active)."""
+        if not self.disturbance_active:
+            return np.zeros(3)
+        
+        # Check if disturbance has expired
+        elapsed = time.time() - self.disturbance_start_time
+        if elapsed > self.disturbance_duration:
+            self.disturbance_active = False
+            self.disturbance_torque = np.zeros(3)
+            self.disturbance_force = np.zeros(3)
+            return np.zeros(3)
+        
+        return self.disturbance_force
+    
+    def get_anti_windup_enabled(self) -> bool:
+        """Get whether anti-windup is enabled."""
+        return self.use_anti_windup
 
